@@ -108,6 +108,140 @@ async def edit_task(ctx, task_number: int, *, new_message: str):
         task_list[task_number - 1]["message"] = new_message
         await ctx.send(f"Task {task_number} has been updated to: {new_message}")
         await ctx.message.add_reaction("✏️")
+    else:
+        await ctx.send("Invalid task number. Please provide a valid number.")
+
+
+@bot.command("export")
+async def export_tasks(ctx):
+    """Exports all tasks to a formatted text file and sends it to the channel.
+    USAGE: \\export"""
+    if not task_list:
+        await ctx.send("Your to-do list is empty. Nothing to export.")
+        return
+
+    # Create export content
+    export_content = "# Toddy Task Export\n"
+    export_content += (
+        f"Exported on: {ctx.message.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+    )
+    export_content += f"Total tasks: {len(task_list)}\n\n"
+
+    for i, task in enumerate(task_list, 1):
+        status = "✅ DONE" if task["done"] else "❌ PENDING"
+        tags = ", ".join(task["tags"]) if task["tags"] else "No tags"
+        export_content += f"Task {i}: {task['message']}\n"
+        export_content += f"  Status: {status}\n"
+        export_content += f"  Tags: {tags}\n"
+        export_content += f"  Added by: {ctx.guild.get_member(task['user']).display_name if ctx.guild.get_member(task['user']) else 'Unknown User'}\n"
+        export_content += (
+            f"  Created: {task['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+        )
+
+    # Create a file and send it
+    import io
+
+    file_buffer = io.StringIO(export_content)
+    file_buffer.seek(0)
+
+    # Convert to bytes for Discord file upload
+    file_bytes = io.BytesIO(export_content.encode("utf-8"))
+    file_bytes.seek(0)
+
+    discord_file = discord.File(
+        file_bytes,
+        filename=f"toddy_export_{ctx.message.created_at.strftime('%Y%m%d_%H%M%S')}.txt",
+    )
+
+    await ctx.send("Here's your exported task list:", file=discord_file)
+    await ctx.message.add_reaction("📄")
+
+
+@bot.command("import:")
+async def import_tasks(ctx):
+    """Imports tasks from an attached text file.
+    USAGE: \\import: (attach a text file to the message)"""
+    if not ctx.message.attachments:
+        await ctx.send("Please attach a text file to import tasks from.")
+        return
+
+    attachment = ctx.message.attachments[0]
+
+    # Check if it's a text file
+    if not attachment.filename.endswith(".txt"):
+        await ctx.send("Please attach a .txt file for importing tasks.")
+        return
+
+    try:
+        # Download and read the file content
+        file_content = await attachment.read()
+        content = file_content.decode("utf-8")
+
+        # Parse the content
+        lines = content.split("\n")
+        imported_count = 0
+        current_task = None
+
+        for line in lines:
+            line = line.strip()
+
+            # Skip empty lines and headers
+            if (
+                not line
+                or line.startswith("#")
+                or line.startswith("Exported on:")
+                or line.startswith("Total tasks:")
+            ):
+                continue
+
+            # Check if this is a task line
+            if line.startswith("Task "):
+                # Extract task message (everything after "Task X: ")
+                if ":" in line:
+                    task_message = line.split(":", 1)[1].strip()
+                    current_task = {
+                        "message": task_message,
+                        "user": ctx.author.id,
+                        "timestamp": ctx.message.created_at,
+                        "tags": [],
+                        "done": False,
+                    }
+
+            # Parse status
+            elif line.startswith("Status:") and current_task:
+                if "✅ DONE" in line:
+                    current_task["done"] = True
+
+            # Parse tags
+            elif line.startswith("Tags:") and current_task:
+                tags_text = line.replace("Tags:", "").strip()
+                if tags_text != "No tags":
+                    tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+                    current_task["tags"] = tags
+
+            # When we reach the end of a task (empty line or new task), add it to the list
+            elif current_task and (not line or line.startswith("Task ")):
+                task_list.append(current_task)
+                imported_count += 1
+                current_task = None
+
+        # Add the last task if it exists
+        if current_task:
+            task_list.append(current_task)
+            imported_count += 1
+
+        if imported_count > 0:
+            await ctx.send(
+                f"Successfully imported {imported_count} task(s) from {attachment.filename}"
+            )
+            await ctx.message.add_reaction("📥")
+        else:
+            await ctx.send(
+                "No valid tasks found in the file. Please check the file format."
+            )
+
+    except Exception as e:
+        await ctx.send(f"Error importing tasks: {str(e)}")
 
 
 load_dotenv()
