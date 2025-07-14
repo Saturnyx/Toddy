@@ -109,6 +109,7 @@ async def edit_task(ctx, task_number: int, *, new_message: str):
         await ctx.send(f"Task {task_number} has been updated to: {new_message}")
         await ctx.message.add_reaction("✏️")
 
+
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
 if token is None:
