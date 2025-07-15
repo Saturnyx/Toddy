@@ -4,7 +4,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 intents = discord.Intents.default()
-intents.message_content = True  # Needed to read message content
+intents.message_content = True 
 
 bot = commands.Bot(command_prefix="\\", intents=intents)
 
@@ -120,7 +120,6 @@ async def export_tasks(ctx):
         await ctx.send("Your to-do list is empty. Nothing to export.")
         return
 
-    # Create export content
     export_content = "# Toddy Task Export\n"
     export_content += (
         f"Exported on: {ctx.message.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
@@ -138,13 +137,13 @@ async def export_tasks(ctx):
             f"  Created: {task['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
         )
 
-    # Create a file and send it
+
     import io
 
     file_buffer = io.StringIO(export_content)
     file_buffer.seek(0)
 
-    # Convert to bytes for Discord file upload
+
     file_bytes = io.BytesIO(export_content.encode("utf-8"))
     file_bytes.seek(0)
 
@@ -167,17 +166,16 @@ async def import_tasks(ctx):
 
     attachment = ctx.message.attachments[0]
 
-    # Check if it's a text file
     if not attachment.filename.endswith(".txt"):
         await ctx.send("Please attach a .txt file for importing tasks.")
         return
 
     try:
-        # Download and read the file content
+        
         file_content = await attachment.read()
         content = file_content.decode("utf-8")
 
-        # Parse the content
+        
         lines = content.split("\n")
         imported_count = 0
         current_task = None
@@ -185,7 +183,7 @@ async def import_tasks(ctx):
         for line in lines:
             line = line.strip()
 
-            # Skip empty lines and headers
+            
             if (
                 not line
                 or line.startswith("#")
@@ -194,9 +192,9 @@ async def import_tasks(ctx):
             ):
                 continue
 
-            # Check if this is a task line
+
             if line.startswith("Task "):
-                # Extract task message (everything after "Task X: ")
+                
                 if ":" in line:
                     task_message = line.split(":", 1)[1].strip()
                     current_task = {
@@ -207,25 +205,21 @@ async def import_tasks(ctx):
                         "done": False,
                     }
 
-            # Parse status
             elif line.startswith("Status:") and current_task:
                 if "✅ DONE" in line:
                     current_task["done"] = True
 
-            # Parse tags
             elif line.startswith("Tags:") and current_task:
                 tags_text = line.replace("Tags:", "").strip()
                 if tags_text != "No tags":
                     tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
                     current_task["tags"] = tags
 
-            # When we reach the end of a task (empty line or new task), add it to the list
             elif current_task and (not line or line.startswith("Task ")):
                 task_list.append(current_task)
                 imported_count += 1
                 current_task = None
 
-        # Add the last task if it exists
         if current_task:
             task_list.append(current_task)
             imported_count += 1
